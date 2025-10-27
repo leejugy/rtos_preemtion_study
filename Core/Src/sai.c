@@ -25,10 +25,10 @@
 #include "usart.h"
 
 /* dma start tx */
-static int sai_tx_start_dma(struct sai_tx_t *sai, uint16_t *buf, uint16_t buf_size);
+static int sai_tx_start_dma(struct sai_tx_t *sai, uint8_t *buf, uint16_t buf_size);
 /* common function */
-static int sai_tx_fill_upper(struct sai_tx_t *sai, uint16_t *buf, uint16_t buf_size);
-static int sai_tx_fill_bottom(struct sai_tx_t *sai, uint16_t *buf, uint16_t buf_size);
+static int sai_tx_fill_upper(struct sai_tx_t *sai, uint8_t *buf, uint16_t buf_size);
+static int sai_tx_fill_bottom(struct sai_tx_t *sai, uint8_t *buf, uint16_t buf_size);
 static int sai_tx_abort_dma(struct sai_tx_t *sai);
 
 sai_tx_t sai_tx[SAI_TX_IDX_MAX] = {
@@ -39,7 +39,7 @@ sai_tx_t sai_tx[SAI_TX_IDX_MAX] = {
     [SAI_TX_IDX1].tx_abort = sai_tx_abort_dma,
 };
 
-static int sai_tx_start_dma(struct sai_tx_t *sai, uint16_t *buf, uint16_t buf_size)
+static int sai_tx_start_dma(struct sai_tx_t *sai, uint8_t *buf, uint16_t buf_size)
 {
     if (buf_size != sizeof(sai->tx_buf))
     {
@@ -75,23 +75,23 @@ static int sai_tx_abort_dma(struct sai_tx_t *sai)
     return 1;
 }
 
-static int sai_tx_fill_upper(struct sai_tx_t *sai, uint16_t *buf, uint16_t buf_size)
+static int sai_tx_fill_upper(struct sai_tx_t *sai, uint8_t *buf, uint16_t buf_size)
 {
-    if (buf_size != (SAI_TX_SAMPLE_SIZE >> 1))
+    if (buf_size != (sizeof(sai->tx_buf) >> 1))
     {
         sai->err = EINVAL;
         return -1;
     }
 
-    int start = (SAI_TX_SAMPLE_SIZE >> 1);
+    int start = (sizeof(sai->tx_buf) >> 1);
 
     memcpy(&sai->tx_buf[start], buf, buf_size);
     return buf_size;
 }
 
-static int sai_tx_fill_bottom(struct sai_tx_t *sai, uint16_t *buf, uint16_t buf_size)
+static int sai_tx_fill_bottom(struct sai_tx_t *sai, uint8_t *buf, uint16_t buf_size)
 {
-    if (buf_size != (SAI_TX_SAMPLE_SIZE >> 1))
+    if (buf_size != (sizeof(sai->tx_buf) >> 1))
     {
         sai->err = EINVAL;
         return -1;
@@ -223,7 +223,7 @@ abort_out:
     }
 }
 
-int sai_tx_req(SAI_TX_IDX idx, SAI_PCM_CTL ctl, uint16_t *buf, int buf_size)
+int sai_tx_req(SAI_TX_IDX idx, SAI_PCM_CTL ctl, uint8_t *buf, int buf_size)
 {
     bool fill_end = false;
     int ret = 0;
