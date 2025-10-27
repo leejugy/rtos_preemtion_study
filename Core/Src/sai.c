@@ -164,7 +164,10 @@ void sai_tx_work(SAI_TX_IDX idx)
     {
     case SAI_PCM_START:
         sai->fill_bottom = false;
-        sai->tx_start(sai, req.buf, req.buf_size);
+        if (sai->tx_start(sai, req.buf, req.buf_size) < 0)
+        {
+            goto out;
+        }
         ret = tx_event_flags_get(&sai->tx_evt, SAI_EVT_FULL_CPLT | SAI_EVT_HALF_CPLT,
                                  TX_OR_CLEAR, &flag, TX_WAIT_FOREVER);
         break;
@@ -186,7 +189,7 @@ void sai_tx_work(SAI_TX_IDX idx)
         break;
 
     default:
-        break;
+        goto out;
     }
 
     if (ret != TX_SUCCESS)
@@ -209,6 +212,7 @@ void sai_tx_work(SAI_TX_IDX idx)
         goto abort_out;
     }
 
+out:
     if (req.fill_end)
     {
         *req.fill_end = true;
