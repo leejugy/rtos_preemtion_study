@@ -7,6 +7,9 @@
         "Ninja"
     ],
     "files.associations": {
-        "status.h": "c"
-    }
+        "status.h": "c",
+        "lan8742.h": "c",
+        "main.h": "c"
+    },
+    "cortex-debug.variableUseNaturalFormat": false
 }

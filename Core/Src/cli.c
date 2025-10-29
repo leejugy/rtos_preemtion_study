@@ -260,13 +260,13 @@ static int cli_cmp_cmd(char *rx, char *cmd_name)
 
 static void reboot_deinit_apps()
 {
+    HAL_NVIC_SystemReset();
 }
 
 static CLI_EXEC_RESULT cmd_reboot(cli_data_t *cli_data)
 {
     print_dmesg("reboot : NVIC system reset");
     reboot_deinit_apps();
-    HAL_NVIC_SystemReset();
     return EXEC_RESULT_ERR;
 }
 

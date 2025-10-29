@@ -32,13 +32,18 @@
 
 /* USER CODE END 1 */
 
-/** Pinout Configuration
+/** Configure pins
+     PA13(JTMS/SWDIO)   ------> DEBUG_JTMS-SWDIO
+     PA14(JTCK/SWCLK)   ------> DEBUG_JTCK-SWCLK
 */
 void MX_GPIO_Init(void)
 {
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOG_CLK_ENABLE();
 
 }
 

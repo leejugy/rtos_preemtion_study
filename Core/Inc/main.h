@@ -37,6 +37,7 @@ extern "C" {
 #include <string.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <errno.h>
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
