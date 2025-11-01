@@ -63,7 +63,7 @@ VOID uart1_tx_thread(ULONG id)
 }
 
 TX_THREAD cli_tcb = {0, };
-uint32_t cli_stack[1024] = {0, };
+uint32_t cli_stack[2048] = {0, };
 
 VOID cli_thread(ULONG id)
 {   

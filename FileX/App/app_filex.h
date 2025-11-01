@@ -31,7 +31,9 @@ extern "C" {
 #include "fx_stm32_sd_driver.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "main.h"
+#include "app_threadx.h"
+#include "usart.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -92,7 +94,72 @@ UINT MX_FileX_Init(VOID *memory_ptr);
 #endif
 
 /* USER CODE BEGIN PD */
+#define ROUTE_LEN 256
+typedef enum
+{
+    SD_READ,
+    SD_WRITE,
+    SD_MKDIR,
+    SD_TOUCH,
+    SD_LIST,
+    SD_REMOVE,
+}SD_REQ_TYPE;
 
+typedef enum
+{
+    SD_LIST_OPEN,
+    SD_LIST_GET,
+    /* OPEN LIST SHOULD BE CLOSED. if you're not closing list, it occur hardfault 
+     * because of dangling pointer of ptr
+     * Also do not use list concurrently.
+     */
+    SD_LIST_CLOSE, 
+}SD_REQ_LIST;
+
+typedef enum
+{
+    SD_READ_OPEN,
+    SD_READ_GET,
+    SD_READ_CLOSE,
+}SD_REQ_READ;
+
+typedef enum
+{
+    SD_WRITE_OPEN,
+    SD_WRITE_SET,
+    SD_WRITE_CLOSE,
+}SD_REQ_WRITE;
+typedef struct
+{
+    char *file_route;
+    void *buf; /* must be one byte buffer... */
+    bool *end;
+    int *ret;
+    int seek;
+    union{
+        SD_REQ_READ read;
+        SD_REQ_WRITE write;
+        SD_REQ_LIST list;
+    }opt;
+    int buf_size;
+    SD_REQ_TYPE type;
+    union{
+        FX_FILE* read;
+        FX_FILE* write;
+        FX_LOCAL_PATH *list;
+    }ptr;
+}sd_req_t;
+
+#define SD_REQ_QUE_SIZE 16
+typedef struct
+{
+    FX_MEDIA *handle;
+    TX_QUEUE que;
+    uint8_t que_stack[sizeof(sd_req_t) * SD_REQ_QUE_SIZE];
+    int err;
+}sd_t;
+
+int sd_req(sd_req_t *req);
 /* USER CODE END PD */
 
 /* USER CODE BEGIN 1 */

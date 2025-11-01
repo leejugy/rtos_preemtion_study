@@ -1,12 +1,20 @@
 #include "cli.h"
 #include "usart.h"
 #include "status.h"
+#include "sai.h"
+#include "app_filex.h"
 
 static CLI_EXEC_RESULT cmd_help(cli_data_t *cli_data);
 static CLI_EXEC_RESULT cmd_echo(cli_data_t *cli_data);
 static CLI_EXEC_RESULT cmd_clear(cli_data_t *cli_data);
 static CLI_EXEC_RESULT cmd_reboot(cli_data_t *cli_data);
 static CLI_EXEC_RESULT cmd_dmesg(cli_data_t *cli_data);
+static CLI_EXEC_RESULT cmd_read(cli_data_t *cli_data);
+static CLI_EXEC_RESULT cmd_write(cli_data_t *cli_data);
+static CLI_EXEC_RESULT cmd_mkdir(cli_data_t *cli_data);
+static CLI_EXEC_RESULT cmd_touch(cli_data_t *cli_data);
+static CLI_EXEC_RESULT cmd_list(cli_data_t *cli_data);
+static CLI_EXEC_RESULT cmd_remove(cli_data_t *cli_data);
 
 cli_command_t cli_cmd[CMD_IDX_MAX] = 
 {
@@ -52,6 +60,60 @@ cli_command_t cli_cmd[CMD_IDX_MAX] =
     [CMD_DMESG].func = cmd_dmesg,
     [CMD_DMESG].opt = "",
     [CMD_DMESG].opt_size = 0,
+
+    /* read */
+    [CMD_READ].help = \
+    "read       : read file from sd card\r\n" \
+    "<use>      : read -r <route> -s <seek> -l <len>\r\n",
+    [CMD_READ].name = "read",
+    [CMD_READ].func = cmd_read,
+    [CMD_READ].opt = "rsl",
+    [CMD_READ].opt_size = 3,
+
+    /* write */
+    [CMD_WRITE].help = \
+    "write      : write file to sd card\r\n" \
+    "<use>      : write -r <route> -s <seek> -i <input>\r\n",
+    [CMD_WRITE].name = "write",
+    [CMD_WRITE].func = cmd_write,
+    [CMD_WRITE].opt = "rsi",
+    [CMD_WRITE].opt_size = 3,
+
+    /* mkdir */
+    [CMD_MKDIR].help = \
+    "mkdir      : make directory\r\n" \
+    "<use>      : mkdir <route>\r\n",
+    [CMD_MKDIR].name = "mkdir",
+    [CMD_MKDIR].func = cmd_mkdir,
+    [CMD_MKDIR].opt = "",
+    [CMD_MKDIR].opt_size = 0,
+
+    /* touch */
+    [CMD_TOUCH].help = \
+    "touch      : make file\r\n" \
+    "<use>      : touch <route>\r\n",
+    [CMD_TOUCH].name = "touch",
+    [CMD_TOUCH].func = cmd_touch,
+    [CMD_TOUCH].opt = "",
+    [CMD_TOUCH].opt_size = 0,
+
+    /* list */
+    [CMD_LIST].help = \
+    "ls         : print directory members\r\n" \
+    "<use>      : ls <route>\r\n",
+    [CMD_LIST].name = "ls",
+    [CMD_LIST].func = cmd_list,
+    [CMD_LIST].opt = "",
+    [CMD_LIST].opt_size = 0,
+
+    /* remove */
+    [CMD_REMOVE].help = \
+    "rm         : remove file or directory to sd card\r\n" \
+    "<use>      : rm <route>\r\n",
+    [CMD_REMOVE].name = "rm",
+    [CMD_REMOVE].func = cmd_remove,
+    [CMD_REMOVE].opt = "",
+    [CMD_REMOVE].opt_size = 0,
 };
 
 /**
@@ -344,6 +406,298 @@ static CLI_EXEC_RESULT cmd_dmesg(cli_data_t *cli_data)
     }
 
     prints("debug message : %s\r\n", msg);
+    return EXEC_RESULT_OK;
+}
+
+static CLI_EXEC_RESULT cmd_read(cli_data_t *cli_data)
+{
+    cli_arg_t cli_arg = {0, };
+    sd_req_t req = {0, };
+    FX_FILE rd = {0, };
+
+    char route[ROUTE_LEN] = {0, };
+    char buf[CLI_SD_BUF_LEN] = {0, };
+    int idx = 0;
+    int len = 0;
+    int __seek = 0;
+    int ret = EXEC_RESULT_OK;
+
+    cli_arg.cli_get.opt = cli_cmd[CMD_READ].opt[idx++];
+    cli_arg.opt.get_ret = true;
+    if (cli_get_opt(cli_data, &cli_arg) < 0)
+    {
+        printr("fail to get arg : %d", idx);
+        return EXEC_RESULT_ERR;
+    }
+    strncpy(route, cli_arg.arg, sizeof(route));
+
+    cli_arg.cli_get.opt = cli_cmd[CMD_READ].opt[idx++];
+    if (cli_get_opt(cli_data, &cli_arg) < 0)
+    {
+        printr("fail to get arg : %d", idx);
+        return EXEC_RESULT_ERR;
+    }
+    __seek = atoi(cli_arg.arg);
+
+    cli_arg.cli_get.opt = cli_cmd[CMD_READ].opt[idx++];
+    if (cli_get_opt(cli_data, &cli_arg) < 0)
+    {
+        printr("fail to get arg : %d", idx);
+        return EXEC_RESULT_ERR;
+    }
+    len = atoi(cli_arg.arg);
+    len = (len > sizeof(buf)) ? sizeof(buf) : len;
+
+    req.buf = buf;
+    req.buf_size = len;
+    req.file_route = route;
+    req.seek = __seek;
+    req.type = SD_READ;
+    req.ptr.read = &rd;
+
+    req.opt.read = SD_READ_OPEN;
+    if (sd_req(&req) < 0)
+    {
+        printr("req fail");
+        return EXEC_RESULT_ERR;
+    }
+
+    req.opt.read = SD_READ_GET;
+    if (sd_req(&req) < 0)
+    {
+        printr("req fail");
+        ret = EXEC_RESULT_ERR;
+    }
+
+    req.opt.read = SD_READ_CLOSE;
+    if (sd_req(&req) < 0)
+    {
+        printr("req fail");
+        ret = EXEC_RESULT_ERR;
+    }
+
+    if (ret == EXEC_RESULT_OK)
+    {
+        prints("read : %s\r\n", buf);
+    }
+    return ret;
+}
+
+static CLI_EXEC_RESULT cmd_write(cli_data_t *cli_data)
+{
+    cli_arg_t cli_arg = {0, };
+    sd_req_t req = {0, };
+    FX_FILE wt = {0, };
+    char route[ROUTE_LEN] = {0, };
+    char buf[CLI_SD_BUF_LEN] = {0, };
+    int idx = 0;
+    int len = 0;
+    int __seek = 0;
+    int ret = EXEC_RESULT_OK;
+
+    cli_arg.cli_get.opt = cli_cmd[CMD_WRITE].opt[idx++];
+    cli_arg.opt.get_ret = true;
+    if (cli_get_opt(cli_data, &cli_arg) < 0)
+    {
+        printr("fail to get arg : %d", idx);
+        return EXEC_RESULT_ERR;
+    }
+    strncpy(route, cli_arg.arg, sizeof(route));
+
+    cli_arg.cli_get.opt = cli_cmd[CMD_WRITE].opt[idx++];
+    if (cli_get_opt(cli_data, &cli_arg) < 0)
+    {
+        printr("fail to get arg : %d", idx);
+        return EXEC_RESULT_ERR;
+    }
+    __seek = atoi(cli_arg.arg);
+
+    cli_arg.cli_get.opt = cli_cmd[CMD_WRITE].opt[idx++];
+    if (cli_get_opt(cli_data, &cli_arg) < 0)
+    {
+        printr("fail to get arg : %d", idx);
+        return EXEC_RESULT_ERR;
+    }
+    strncpy(buf, cli_arg.arg, sizeof(buf));
+    len = strlen(buf);
+
+    req.buf = buf;
+    req.buf_size = len;
+    req.file_route = route;
+    req.seek = __seek;
+    req.type = SD_WRITE;
+    req.ptr.write = &wt;
+
+    req.opt.write = SD_WRITE_OPEN;
+    if (sd_req(&req) < 0)
+    {
+        printr("req fail");
+        return EXEC_RESULT_ERR;
+    }
+
+    req.opt.write = SD_WRITE_SET;
+    if (sd_req(&req) < 0)
+    {
+        printr("req fail");
+        ret = EXEC_RESULT_ERR;
+    }
+
+    req.opt.write = SD_WRITE_CLOSE;
+    if (sd_req(&req) < 0)
+    {
+        printr("req fail");
+        ret = EXEC_RESULT_ERR;
+    }
+
+    if (ret == EXEC_RESULT_OK)
+    {
+        prints("write : %s\r\n", buf);
+    }
+    return ret;
+}
+
+static CLI_EXEC_RESULT cmd_mkdir(cli_data_t *cli_data)
+{
+    cli_arg_t cli_arg = {0, };
+    sd_req_t req = {0, };
+    char route[ROUTE_LEN] = {0, };
+
+    cli_arg.cli_get.num = 0;
+    cli_arg.opt.get_ret = true;
+    if (cli_get_arg(cli_data, &cli_arg) < 0)
+    {
+        printr("fail to get arg");
+        return EXEC_RESULT_ERR;
+    }
+    strncpy(route, cli_arg.arg, sizeof(route));
+
+    req.file_route = route;
+    req.type = SD_MKDIR;
+
+    if (sd_req(&req) < 0)
+    {
+        printr("req fail");
+        return EXEC_RESULT_ERR;
+    }
+    prints("mkdir : %s\r\n", route);
+    return EXEC_RESULT_OK;
+}
+
+static CLI_EXEC_RESULT cmd_touch(cli_data_t *cli_data)
+{
+    cli_arg_t cli_arg = {0, };
+    sd_req_t req = {0, };
+    char route[ROUTE_LEN] = {0, };
+
+    cli_arg.cli_get.num = 0;
+    cli_arg.opt.get_ret = true;
+    if (cli_get_arg(cli_data, &cli_arg) < 0)
+    {
+        printr("fail to get arg");
+        return EXEC_RESULT_ERR;
+    }
+    strncpy(route, cli_arg.arg, sizeof(route));
+
+    req.file_route = route;
+    req.type = SD_TOUCH;
+
+    if (sd_req(&req) < 0)
+    {
+        printr("req fail");
+        return EXEC_RESULT_ERR;
+    }
+    prints("touch : %s\r\n", route);
+    return EXEC_RESULT_OK;
+}
+
+static CLI_EXEC_RESULT cmd_list(cli_data_t *cli_data)
+{
+    cli_arg_t cli_arg = {0, };
+    sd_req_t req = {0, };
+    FX_LOCAL_PATH ls = {0, };
+    char route[ROUTE_LEN] = {0, };
+    char buf[ROUTE_LEN] = {0, };
+    int ret = 0;
+
+    cli_arg.cli_get.num = 0;
+    cli_arg.opt.get_ret = true;
+    if (cli_get_arg(cli_data, &cli_arg) < 0)
+    {
+        strcpy(route, "/");
+    }
+    else
+    {
+        strncpy(route, cli_arg.arg, sizeof(route));
+    }
+
+    req.file_route = route;
+    req.type = SD_LIST;
+    req.opt.list = SD_LIST_OPEN;
+    req.buf = buf;
+    req.ptr.list = &ls;
+
+    ret = sd_req(&req);
+    if (ret < 0)
+    {
+        printr("req fail");
+        return EXEC_RESULT_ERR;
+    }
+    else if (ret == 0)
+    {
+        return EXEC_RESULT_OK;
+    }
+
+    req.opt.list = SD_LIST_GET;
+    while (1)
+    {
+        prints("%s\r\n", buf);
+        memset(buf, 0, sizeof(buf));
+
+        ret = sd_req(&req);
+        if (ret < 0)
+        {
+            printr("req fail");
+            return EXEC_RESULT_ERR;
+        }
+        else if (ret == 0)
+        {
+            req.opt.list = SD_LIST_CLOSE;
+            ret = sd_req(&req);
+            if (ret < 0)
+            {
+                printr("req fail");
+                return EXEC_RESULT_ERR;
+            }
+            return EXEC_RESULT_OK;
+        }
+    }
+    return EXEC_RESULT_OK;
+}
+
+static CLI_EXEC_RESULT cmd_remove(cli_data_t *cli_data)
+{
+    cli_arg_t cli_arg = {0, };
+    sd_req_t req = {0, };
+    char route[ROUTE_LEN] = {0, };
+
+    cli_arg.cli_get.num = 0;
+    cli_arg.opt.get_ret = true;
+    if (cli_get_arg(cli_data, &cli_arg) < 0)
+    {
+        printr("fail to get arg");
+        return EXEC_RESULT_ERR;
+    }
+    strncpy(route, cli_arg.arg, sizeof(route));
+
+    req.file_route = route;
+    req.type = SD_REMOVE;
+
+    if (sd_req(&req) < 0)
+    {
+        printr("req fail");
+        return EXEC_RESULT_ERR;
+    }
+    prints("remove : %s\r\n", route);
     return EXEC_RESULT_OK;
 }
 

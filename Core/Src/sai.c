@@ -242,6 +242,11 @@ int sai_tx_req(SAI_TX_IDX idx, SAI_PCM_CTL ctl, uint8_t *buf, int buf_size)
 
     ret = tx_queue_send(&sai->tx_que, &req, 100);
 
+    if (buf_size != (SAI_TX_BUF_SIZE >> 1))
+    {
+        return -1;
+    }
+
     if (ret != TX_SUCCESS)
     {
         return -1;

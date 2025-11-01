@@ -8,6 +8,7 @@
 #define CMD_MAX_LEN (1 << 9)
 #define CLI_HISTORY_NUM (1 << 2)
 #define CMD_FILE_TRX_SIZE (1 << 7)
+#define CLI_SD_BUF_LEN (1 << 7)
 
 typedef enum
 {
@@ -16,6 +17,12 @@ typedef enum
     CMD_CLEAR,
     CMD_REBOOT,
     CMD_DMESG,
+    CMD_READ,
+    CMD_WRITE,
+    CMD_MKDIR,
+    CMD_TOUCH,
+    CMD_LIST,
+    CMD_REMOVE,
     CMD_IDX_MAX,
 }CLI_COMMAND_IDX;
 

@@ -18,6 +18,16 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
+# Debug 전역 플래그 (C/C++)
+set(CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS_DEBUG} -O0 -g3 -fno-inline -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g3 -fno-inline -fno-omit-frame-pointer")
+
+# (선택) ASM도 디버깅 심볼 붙이려면
+set(CMAKE_ASM_FLAGS_DEBUG "${CMAKE_ASM_FLAGS_DEBUG} -g3")
+
+# (선택) LTO 비활성화
+set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} -fno-lto")
+
 # Set the project name
 set(CMAKE_PROJECT_NAME threadx_priority_test)
 
