@@ -30,7 +30,7 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "main.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -51,6 +51,19 @@ extern "C" {
 
 /* Main thread defines -------------------------------------------------------*/
 /* USER CODE BEGIN MTD */
+static inline bool check_expired(uint32_t old, uint32_t goal)
+{   
+    if (tx_time_get() - old < goal)
+    {
+        return false;
+    }
+    return true;
+}
+
+static inline bool check_not_expired(uint32_t old, uint32_t goal)
+{
+    return !check_expired(old, goal);
+}
 
 /* USER CODE END MTD */
 

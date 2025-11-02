@@ -82,19 +82,17 @@ static void sd_init(sd_t *__sd)
 
 static int sd_write(sd_t *__sd, sd_req_t *req)
 {
-    if (!req->buf || req->buf_size == 0 ||
-        !req->file_route)
-    {
-        __sd->err = EINVAL;
-        return -1;
-    }
-
     UINT status = TX_FALSE;
-    int ret = 0;
+    int ret = 1;
     
     switch (req->opt.write)
     {
     case SD_WRITE_OPEN:
+        if (!req->ptr.read || !req->file_route)
+        {
+            __sd->err = EINVAL;
+            return -1;
+        }
         status = fx_file_open(__sd->handle, req->ptr.write, req->file_route, FX_OPEN_FOR_WRITE);
         if (status != FX_SUCCESS)
         {
@@ -102,12 +100,20 @@ static int sd_write(sd_t *__sd, sd_req_t *req)
             return -1;
         }
         break;
-        
-    case SD_WRITE_SET:
+
+    case SD_WRITE_SEEK:
         status = fx_file_seek(req->ptr.write, req->seek);
         if (status != FX_SUCCESS)
         {
             __sd->err = ESPIPE;
+            return -1;
+        }
+        break;
+        
+    case SD_WRITE_SET:
+        if (!req->buf || req->buf_size == 0)
+        {
+            __sd->err = EINVAL;
             return -1;
         }
 
@@ -136,20 +142,18 @@ static int sd_write(sd_t *__sd, sd_req_t *req)
 
 static int sd_read(sd_t *__sd, sd_req_t *req)
 {
-    if (!req->buf || req->buf_size == 0 ||
-        !req->file_route)
-    {
-        __sd->err = EINVAL;
-        return -1;
-    }
-
     UINT status = TX_FALSE;
     ULONG len = 0;
     int ret = 1;
 
     switch (req->opt.read)
     {
-    case SD_READ_OPEN:
+    case SD_READ_OPEN:        
+        if (!req->ptr.read || !req->file_route)
+        {
+            __sd->err = EINVAL;
+            return -1;
+        }
         status = fx_file_open(__sd->handle, req->ptr.read, req->file_route, FX_OPEN_FOR_READ_FAST);
         if (status != FX_SUCCESS)
         {
@@ -157,17 +161,29 @@ static int sd_read(sd_t *__sd, sd_req_t *req)
             return -1;
         }
         break;
-        
-    case SD_READ_GET:
+
+    case SD_READ_SEEK:
         status = fx_file_seek(req->ptr.read, req->seek);
         if (status != FX_SUCCESS)
         {
             __sd->err = ESPIPE;
             return -1;
         }
+        break;
+        
+    case SD_READ_GET:
+        if (!req->buf || req->buf_size == 0)
+        {
+            __sd->err = EINVAL;
+            return -1;
+        }
 
         status = fx_file_read(req->ptr.read, req->buf, req->buf_size, &len);
-        if (status != FX_SUCCESS)
+        if (status == FX_END_OF_FILE)
+        {
+            return 0;
+        }
+        else if (status != FX_SUCCESS)
         {
             __sd->err = EFAULT;
             return -1;
@@ -409,6 +425,7 @@ int sd_req(sd_req_t *req)
     }
 
     status = tx_queue_send(&sd.que, req, TX_WAIT_FOREVER);
+    /* this req is not need to check TX_QUEUE_FULL */
     if (status != TX_SUCCESS)
     {
         return -1;

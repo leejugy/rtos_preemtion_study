@@ -41,7 +41,7 @@ typedef enum
     SAI_TX_IDX_MAX,
 }SAI_TX_IDX;
 
-#define SAI_TX_BUF_SIZE (1 << 12)
+#define SAI_TX_BUF_SIZE (1 << 13)
 
 /* this buffer must be allinged as 4byte */
 
@@ -59,11 +59,10 @@ typedef struct
 {
     uint8_t *buf;
     int buf_size;
-    bool *fill_end;
     SAI_PCM_CTL ctl;
 }sai_tx_req_t;
 
-#define SAI_TX_QUE_NUM 4
+#define SAI_TX_QUE_NUM 8
 
 typedef struct sai_tx_t
 {
@@ -78,7 +77,6 @@ typedef struct sai_tx_t
     TX_EVENT_FLAGS_GROUP tx_evt;
     TX_THREAD *owner;
     int err;
-    bool fill_bottom;
 }sai_tx_t;
 /* USER CODE END Private defines */
 
@@ -87,7 +85,7 @@ void MX_SAI1_Init(void);
 /* USER CODE BEGIN Prototypes */
 void sai_init();
 void sai_tx_work(SAI_TX_IDX idx);
-int sai_tx_req(SAI_TX_IDX idx, SAI_PCM_CTL ctl, uint8_t *buf, int buf_size);
+int sai_tx_req(SAI_TX_IDX idx, sai_tx_req_t *req);
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

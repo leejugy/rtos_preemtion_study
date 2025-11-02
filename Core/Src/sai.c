@@ -56,7 +56,7 @@ static int sai_tx_start_dma(struct sai_tx_t *sai, uint8_t *buf, uint16_t buf_siz
     int ret = 0;
 
     memcpy(sai->tx_buf, buf, buf_size);
-    ret = HAL_SAI_Transmit_DMA(sai->handle, (uint8_t *)sai->tx_buf, sizeof(sai->tx_buf));
+    ret = HAL_SAI_Transmit_DMA(sai->handle, (uint8_t *)sai->tx_buf, sizeof(sai->tx_buf) / 2);
     if (ret != HAL_OK)
     {
         sai->err = EBADF;
@@ -146,115 +146,98 @@ void sai_tx_work(SAI_TX_IDX idx)
     if (ret != TX_SUCCESS)
     {
         sai->err = EPIPE;
-        goto abort_out;
+        sai->tx_abort(sai);
+        return;
     }
 
     if (!sai->tx_start || !sai->tx_fill_bottom ||
         !sai->tx_fill_upper || !sai->tx_abort)
     {
         sai->err = EINVAL;
-        if (req.fill_end)
-        {
-            *req.fill_end = true;
-        }
         return;
     }
 
     switch (req.ctl)
     {
     case SAI_PCM_START:
-        sai->fill_bottom = false;
         if (sai->tx_start(sai, req.buf, req.buf_size) < 0)
         {
-            goto out;
+            break;
         }
         ret = tx_event_flags_get(&sai->tx_evt, SAI_EVT_FULL_CPLT | SAI_EVT_HALF_CPLT,
-                                 TX_OR_CLEAR, &flag, TX_WAIT_FOREVER);
+                                 TX_OR, &flag, TX_WAIT_FOREVER);
+        if (ret != TX_SUCCESS)
+        {
+            sai->err = EPIPE;
+            sai->tx_abort(sai);
+        }
         break;
     
     case SAI_PCM_ABORT:
-        goto abort_out;
+        sai->tx_abort(sai);
+        break;
 
     case SAI_PCM_CONTINUE:
-        if (sai->fill_bottom)
+        ret = tx_event_flags_get(&sai->tx_evt, SAI_EVT_FULL_CPLT | SAI_EVT_HALF_CPLT,
+                                 TX_OR_CLEAR, &flag, TX_WAIT_FOREVER);
+        if (ret != TX_SUCCESS)
+        {
+            sai->err = EPIPE;
+            sai->tx_abort(sai);
+        }
+
+        if (flag & SAI_EVT_HALF_CPLT)
         {
             sai->tx_fill_bottom(sai, req.buf, req.buf_size);
+            flag &= ~SAI_EVT_HALF_CPLT;
+        }
+        else if (flag & SAI_EVT_FULL_CPLT)
+        {
+            sai->tx_fill_upper(sai, req.buf, req.buf_size);
+            flag &= ~SAI_EVT_FULL_CPLT;
         }
         else
         {
-            sai->tx_fill_upper(sai, req.buf, req.buf_size);
+            sai->err = EBADMSG;
+            sai->tx_abort(sai);
         }
-        ret = tx_event_flags_get(&sai->tx_evt, SAI_EVT_FULL_CPLT | SAI_EVT_HALF_CPLT,
-                                 TX_OR_CLEAR, &flag, TX_WAIT_FOREVER);
         break;
 
     default:
-        goto out;
-    }
-
-    if (ret != TX_SUCCESS)
-    {
-        sai->err = EPIPE;
-        goto abort_out;
-    }
-
-    if (flag & SAI_EVT_HALF_CPLT)
-    {
-        sai->fill_bottom = true;
-    }
-    else if (flag & SAI_EVT_FULL_CPLT)
-    {
-        sai->fill_bottom = false;
-    }
-    else
-    {
-        sai->err = EBADMSG;
-        goto abort_out;
-    }
-
-out:
-    if (req.fill_end)
-    {
-        *req.fill_end = true;
+        break;
     }
     return;
-
-abort_out:
-    sai->tx_abort(sai);
-    if (req.fill_end)
-    {
-        *req.fill_end = true;
-    }
 }
 
-int sai_tx_req(SAI_TX_IDX idx, SAI_PCM_CTL ctl, uint8_t *buf, int buf_size)
+int sai_tx_req(SAI_TX_IDX idx, sai_tx_req_t *req)
 {
-    bool fill_end = false;
     int ret = 0;
-    sai_tx_req_t req = {
-        .buf = buf,
-        .buf_size = buf_size,
-        .ctl = ctl,
-        .fill_end = &fill_end,
-    };
 
     sai_tx_t *sai = &sai_tx[idx];
-
-    ret = tx_queue_send(&sai->tx_que, &req, 100);
-
-    if (buf_size != (SAI_TX_BUF_SIZE >> 1))
+    /* Keep a 1-slot guard in the ring at all times. it's "RING BUFFER", NOT "QUEUE"
+     * SAI_TX_QUE_NUM - 1 can duplicate ling buffer
+     * For example, ring buffer has "[A][B][C][D][E][F][G][H]"
+     * Que has "[A][B][C][D][E][F][G][_]"
+     * If pop from tx_que and one remaining space is exist, 
+     * Que has "[A][B][C][D][E][F][G][H]". ring buffer can fill "A"
+     * "[A][B][C][D][E][F][G][H]" -> "[I][B][C][D][E][F][G][H]"
+     * In a bad case, before copy to sai's tx buffer, [I] is filled to ring buffer
+     * instead of [A] so, sound tearing is occured.
+     * */
+    if (sai->tx_que.tx_queue_enqueued == SAI_TX_QUE_NUM - 2)
     {
-        return -1;
+        return 0;
     }
 
-    if (ret != TX_SUCCESS)
+    ret = tx_queue_send(&sai->tx_que, req, TX_WAIT_FOREVER);
+
+    if (ret == TX_QUEUE_FULL)
+    {
+        return 0;
+    }
+    else if (ret != TX_SUCCESS)
     {
         return -1;
-    }
-
-    while (!fill_end)
-    {
-        tx_thread_relinquish();
     }
     return 1;
 }
@@ -278,6 +261,8 @@ void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
             break;
         }
     }
+
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_2);
 }
 
 void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
@@ -325,7 +310,7 @@ void MX_SAI1_Init(void)
   hsai_BlockA1.Init.OutputDrive = SAI_OUTPUTDRIVE_DISABLE;
   hsai_BlockA1.Init.NoDivider = SAI_MASTERDIVIDER_ENABLE;
   hsai_BlockA1.Init.FIFOThreshold = SAI_FIFOTHRESHOLD_EMPTY;
-  hsai_BlockA1.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_192K;
+  hsai_BlockA1.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_44K;
   hsai_BlockA1.Init.SynchroExt = SAI_SYNCEXT_DISABLE;
   hsai_BlockA1.Init.MckOutput = SAI_MCK_OUTPUT_ENABLE;
   hsai_BlockA1.Init.MonoStereoMode = SAI_STEREOMODE;

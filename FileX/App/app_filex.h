@@ -120,6 +120,7 @@ typedef enum
 {
     SD_READ_OPEN,
     SD_READ_GET,
+    SD_READ_SEEK,
     SD_READ_CLOSE,
 }SD_REQ_READ;
 
@@ -127,6 +128,7 @@ typedef enum
 {
     SD_WRITE_OPEN,
     SD_WRITE_SET,
+    SD_WRITE_SEEK,
     SD_WRITE_CLOSE,
 }SD_REQ_WRITE;
 typedef struct

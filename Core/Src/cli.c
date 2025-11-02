@@ -2,6 +2,7 @@
 #include "usart.h"
 #include "status.h"
 #include "sai.h"
+#include "wav_ctl.h"
 #include "app_filex.h"
 
 static CLI_EXEC_RESULT cmd_help(cli_data_t *cli_data);
@@ -15,6 +16,7 @@ static CLI_EXEC_RESULT cmd_mkdir(cli_data_t *cli_data);
 static CLI_EXEC_RESULT cmd_touch(cli_data_t *cli_data);
 static CLI_EXEC_RESULT cmd_list(cli_data_t *cli_data);
 static CLI_EXEC_RESULT cmd_remove(cli_data_t *cli_data);
+static CLI_EXEC_RESULT cmd_aplay(cli_data_t *cli_data);
 
 cli_command_t cli_cmd[CMD_IDX_MAX] = 
 {
@@ -114,6 +116,17 @@ cli_command_t cli_cmd[CMD_IDX_MAX] =
     [CMD_REMOVE].func = cmd_remove,
     [CMD_REMOVE].opt = "",
     [CMD_REMOVE].opt_size = 0,
+
+    /* aplay */
+    [CMD_APLAY].help = \
+    "aplay         : control wav file\r\n" \
+    "<play>        : aplay -r <route>\r\n" \
+    "<stop>        : aplay -s\r\n",
+    "<volume>        : aplay -v <volume>\r\n",
+    [CMD_APLAY].name = "aplay",
+    [CMD_APLAY].func = cmd_aplay,
+    [CMD_APLAY].opt = "rsv",
+    [CMD_APLAY].opt_size = 2,
 };
 
 /**
@@ -462,6 +475,13 @@ static CLI_EXEC_RESULT cmd_read(cli_data_t *cli_data)
         return EXEC_RESULT_ERR;
     }
 
+    req.opt.read = SD_READ_SEEK;
+    if (sd_req(&req) < 0)
+    {
+        printr("req fail");
+        ret = EXEC_RESULT_ERR;
+    }
+
     req.opt.read = SD_READ_GET;
     if (sd_req(&req) < 0)
     {
@@ -533,6 +553,13 @@ static CLI_EXEC_RESULT cmd_write(cli_data_t *cli_data)
     {
         printr("req fail");
         return EXEC_RESULT_ERR;
+    }
+
+    req.opt.read = SD_WRITE_SEEK;
+    if (sd_req(&req) < 0)
+    {
+        printr("req fail");
+        ret = EXEC_RESULT_ERR;
     }
 
     req.opt.write = SD_WRITE_SET;
@@ -657,19 +684,21 @@ static CLI_EXEC_RESULT cmd_list(cli_data_t *cli_data)
         if (ret < 0)
         {
             printr("req fail");
-            return EXEC_RESULT_ERR;
+            ret = EXEC_RESULT_ERR;
+            break;
         }
         else if (ret == 0)
         {
-            req.opt.list = SD_LIST_CLOSE;
-            ret = sd_req(&req);
-            if (ret < 0)
-            {
-                printr("req fail");
-                return EXEC_RESULT_ERR;
-            }
-            return EXEC_RESULT_OK;
+            ret = EXEC_RESULT_OK;
+            break;
         }
+    }
+    req.opt.list = SD_LIST_CLOSE;
+    ret = sd_req(&req);
+    if (ret < 0)
+    {
+        printr("req fail");
+        return EXEC_RESULT_ERR;
     }
     return EXEC_RESULT_OK;
 }
@@ -699,6 +728,88 @@ static CLI_EXEC_RESULT cmd_remove(cli_data_t *cli_data)
     }
     prints("remove : %s\r\n", route);
     return EXEC_RESULT_OK;
+}
+
+static CLI_EXEC_RESULT cmd_aplay(cli_data_t *cli_data)
+{
+    cli_arg_t cli_arg = {0, };    
+    wav_req_t req = {0, };
+    char route[ROUTE_LEN] = {0, };
+    int idx = 0;
+    int ret = 0;
+
+    cli_arg.cli_get.opt = cli_cmd[CMD_APLAY].opt[idx++];
+    cli_arg.opt.get_ret = true;
+    if (cli_get_opt(cli_data, &cli_arg) > 0)
+    {
+        prints("aplay : playing - %s\r\n", cli_arg.arg);
+        strncpy(route, cli_arg.arg, sizeof(route));
+        req.cmd = WAV_START;
+        req.route = route;
+        ret = wav_req(WAV_PLAY_IDX1, &req);
+        if (ret < 0)
+        {
+            printr("fail to request to wav thread");
+            return EXEC_RESULT_ERR;
+        }
+        else if (ret == 0)
+        {
+            printr("wav is full");
+            return EXEC_RESULT_ERR;
+        }
+        return EXEC_RESULT_OK;
+    }
+
+    cli_arg.cli_get.opt = cli_cmd[CMD_APLAY].opt[idx++];
+    cli_arg.opt.get_ret = false;
+    if (cli_get_opt(cli_data, &cli_arg) == 0)
+    {
+        prints("aplay : stop\r\n");
+        strncpy(route, cli_arg.arg, sizeof(route));
+        req.cmd = WAV_STOP;
+        ret = wav_req(WAV_PLAY_IDX1, &req);
+        if (ret < 0)
+        {
+            printr("fail to request to wav thread");
+            return EXEC_RESULT_ERR;
+        }
+        else if (ret == 0)
+        {
+            printr("wav is full");
+            return EXEC_RESULT_ERR;
+        }
+        return EXEC_RESULT_OK;
+    }
+
+    cli_arg.cli_get.opt = cli_cmd[CMD_APLAY].opt[idx++];
+    cli_arg.opt.get_ret = true;
+    if (cli_get_opt(cli_data, &cli_arg) > 0)
+    {
+        req.volume = atoi(cli_arg.arg);
+        req.cmd = WAV_VOL_SET;
+        if (req.volume > 100 || req.volume < 0)
+        {
+            printr("invalid range [0 ~ 100]");
+            return EXEC_RESULT_ERR;
+        }
+
+        prints("aplay : volume : %d\r\n", req.volume);
+        ret = wav_req(WAV_PLAY_IDX1, &req);
+        if (ret < 0)
+        {
+            printr("fail to request to wav thread");
+            return EXEC_RESULT_ERR;
+        }
+        else if (ret == 0)
+        {
+            printr("wav is full");
+            return EXEC_RESULT_ERR;
+        }
+        return EXEC_RESULT_OK;
+    }
+
+    printr("invalid using");
+    return EXEC_RESULT_ERR;
 }
 
 static CLI_EXEC_RESULT cmd_clear(cli_data_t *cli_data)

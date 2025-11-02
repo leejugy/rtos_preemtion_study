@@ -57,6 +57,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/cli.c
     Core/Src/status.c
+    Core/Src/wav_ctl.c
+    Core/Src/pcm5102a.c
 )
 
 # Add include paths

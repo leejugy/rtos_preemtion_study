@@ -30,6 +30,7 @@ extern "C" {
 
 /* USER CODE BEGIN Includes */
 #include "app_threadx.h"
+#include "status.h"
 /* USER CODE END Includes */
 
 extern UART_HandleTypeDef huart1;

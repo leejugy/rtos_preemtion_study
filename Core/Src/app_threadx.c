@@ -32,6 +32,7 @@
 #include "cli.h"
 #include "status.h"
 #include "sai.h"
+#include "wav_ctl.h"
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -85,6 +86,18 @@ VOID sai1_tx_thread(ULONG id)
     }
 }
 
+TX_THREAD wav1_tcb = {0, };
+uint32_t wav1_stack[1024] = {0, };
+
+VOID wav1_thread(ULONG id)
+{   
+    while (1)
+    {
+        wav_work(WAV_PLAY_IDX1);
+        tx_thread_sleep(1);
+    }
+}
+
 /* USER CODE END PFP */
 
 /**
@@ -101,6 +114,7 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
     uart_init();
     status_init();
     sai_init();
+    wav_init();
 
     ret = tx_thread_create(&uart1_tx_tcb, "uart1 tx", uart1_tx_thread, 0,
                      uart1_tx_stack, sizeof(uart1_tx_stack), 5, 5, 10, TX_AUTO_START);
@@ -118,12 +132,19 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
         Error_Handler();
     }        
     ret = tx_thread_create(&sai1_tx_tcb, "sai1_tx", sai1_tx_thread, 0,
-                     sai1_tx_stack, sizeof(sai1_tx_stack), 4, 4, 10, TX_AUTO_START);
+                     sai1_tx_stack, sizeof(sai1_tx_stack), 5, 5, 10, TX_AUTO_START);
 
     if (ret != TX_SUCCESS)
     {
         Error_Handler();
-    }        
+    }     
+    ret = tx_thread_create(&wav1_tcb, "sai1_tx", wav1_thread, 0,
+                     wav1_stack, sizeof(wav1_stack), 8, 8, 10, TX_AUTO_START);
+
+    if (ret != TX_SUCCESS)
+    {
+        Error_Handler();
+    }     
   /* USER CODE END App_ThreadX_MEM_POOL */
 
   /* USER CODE BEGIN App_ThreadX_Init */

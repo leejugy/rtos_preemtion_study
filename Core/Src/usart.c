@@ -341,8 +341,12 @@ int uart_write(UART_IDX idx, uint8_t *buf, uint16_t buf_size)
 
     if (ut->tx == uart_tx_it || ut->tx == uart_tx_dma)
     {
-        ret = tx_queue_send(&ut->tx_que, &req, 100);
-        if (ret != TX_SUCCESS)
+        ret = tx_queue_send(&ut->tx_que, &req, TX_WAIT_FOREVER);
+        if (ret == TX_QUEUE_FULL)
+        {
+            return 0;
+        }
+        else if (ret != TX_SUCCESS)
         {
             return -1;
         }
