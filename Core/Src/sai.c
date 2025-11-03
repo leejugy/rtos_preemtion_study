@@ -164,13 +164,6 @@ void sai_tx_work(SAI_TX_IDX idx)
         {
             break;
         }
-        ret = tx_event_flags_get(&sai->tx_evt, SAI_EVT_FULL_CPLT | SAI_EVT_HALF_CPLT,
-                                 TX_OR, &flag, TX_WAIT_FOREVER);
-        if (ret != TX_SUCCESS)
-        {
-            sai->err = EPIPE;
-            sai->tx_abort(sai);
-        }
         break;
     
     case SAI_PCM_ABORT:
