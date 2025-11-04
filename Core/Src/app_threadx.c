@@ -110,7 +110,7 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
   UINT ret = TX_SUCCESS;
 
   /* USER CODE BEGIN App_ThreadX_MEM_POOL */
-    /* driver priority 1 ~ 16, application priority 17 ~ 32 */
+    /* driver priority 1 ~ 16, application priority 17 ~ 31 */
     uart_init();
     status_init();
     sai_init();
@@ -132,7 +132,7 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
         Error_Handler();
     }        
     ret = tx_thread_create(&sai1_tx_tcb, "sai1_tx", sai1_tx_thread, 0,
-                     sai1_tx_stack, sizeof(sai1_tx_stack), 5, 5, 10, TX_AUTO_START);
+                     sai1_tx_stack, sizeof(sai1_tx_stack), 4, 4, 10, TX_AUTO_START);
 
     if (ret != TX_SUCCESS)
     {

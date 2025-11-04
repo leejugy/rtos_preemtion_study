@@ -41,7 +41,7 @@ typedef enum
     SAI_TX_IDX_MAX,
 }SAI_TX_IDX;
 
-#define SAI_TX_BUF_SIZE (1 << 13)
+#define SAI_TX_BUF_SIZE (1 << 14)
 
 /* this buffer must be allinged as 4byte */
 
