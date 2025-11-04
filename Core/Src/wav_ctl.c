@@ -245,7 +245,7 @@ static void wav_sd_end(wav_play_t *wav)
     sai_tx_req_t __sai_tx_req = {0, };
     int ret = 0;
 
-    if (check_expired(wav->end_tick, 500))
+    if (check_expired(wav->end_tick, 100))
     {
         __sai_tx_req.ctl = SAI_PCM_ABORT;
         ret = sai_tx_req(wav->idx, &__sai_tx_req);
